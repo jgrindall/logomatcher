@@ -22,7 +22,7 @@
 	</head>
 	<body>
 		<button id="draw">Draw</button>
-		<button id="check">Check</button>
+		<button disabled id="check">Check</button>
 		<br/>
 		<br/>
 		<table>
@@ -158,6 +158,7 @@
 			
 			var draw = function(){
 				reset();
+				$("button#check").attr("disabled", "disabled");
 				var t0 = _cleanLogo($("#text0").val());
 				var t1 = _cleanLogo($("#text1").val());
 				var p = [
@@ -168,6 +169,7 @@
 					// done
 					setTimeout(function(){
 						check();
+						$("button#check").removeAttr("disabled");
 					}, 500);
 				});
 			};

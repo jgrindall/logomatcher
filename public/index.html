@@ -5,6 +5,7 @@
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.11.5/paper-full.min.js"></script>
 		<script src="logo.js"></script>
 		<script src="sketchy.js"></script>
+		<script src="tracking-min.js"></script>
 		<script src="phash.js"></script>
 		<script src="rembrandt.js"></script>
 		<script src="imagetracer.js"></script>
@@ -20,6 +21,9 @@
 				padding:3px;
 				font-size:large;
 				margin:6px;
+			}
+			.row-ok{
+				background:rgba(0,190,0,0.4);
 			}
 		</style>
 	</head>
@@ -70,7 +74,7 @@
             };
 			
 			var OPTIONS =  {
-				"ltres":0.1,   // tweak?
+				"ltres":5,   // tweak?
 				"qtres":-1,    // negative to never match curves
 				"scale":1      // why?
 			};
@@ -239,6 +243,7 @@
 				return new Promise(function(resolve, reject){
 					var svgstr0 = ImageTracer.imagedataToSVG(ImageTracer.getImgdata(canvas0), OPTIONS);
 					var svgstr1 = ImageTracer.imagedataToSVG(ImageTracer.getImgdata(canvas1), OPTIONS);
+					console.log(svgstr0);
 					var c = Sketchy.shapeContextMatch(JSON.stringify(_format(svgstr0)), JSON.stringify(_format(svgstr1)));
 					c = Math.round(c*100) + "%";
 					resolve({
@@ -265,27 +270,66 @@
 			};
 			
 			var _predict = function(p){
-				return (_dot(_aMinusB(p, plane_data.pt), plane_data.normal) < 0);
+				return (p.x > 35 && p.y < 16 && p.z < 1.5);
+			};
+			
+			var _getTrack = function(canvas0, canvas1){
+				return new Promise(function(resolve, reject){
+					var imageData1 = canvas0.getContext("2d").getImageData(0, 0, 600, 600);
+					  var imageData2 = canvas1.getContext("2d").getImageData(0, 0, 600, 600);
+				  
+					  var gray1 = tracking.Image.grayscale(tracking.Image.blur(imageData1.data, 600, 600, 2), 600, 600);
+					  var gray2 = tracking.Image.grayscale(tracking.Image.blur(imageData2.data, 600, 600, 2), 600, 600);
+				  
+					  var corners1 = tracking.Fast.findCorners(gray1, 600, 600);
+					  var corners2 = tracking.Fast.findCorners(gray2, 600, 600);
+				  
+					  var descriptors1 = tracking.Brief.getDescriptors(gray1, 600, corners1);
+					  var descriptors2 = tracking.Brief.getDescriptors(gray2, 600, corners2);
+
+					  var matches = tracking.Brief.reciprocalMatch(corners1, descriptors1, corners2, descriptors2);
+					   matches.sort(function(a, b) {
+							return b.confidence - a.confidence;
+						});
+						
+						var NUM = matches.length;
+						var _distSqr = function(match){
+							var p0 = match.keypoint1;
+							var p1 = match.keypoint2;
+							var dx = p0[0] - p1[0];
+							var dy = p0[1] - p1[1];
+							return (dx*dx + dy*dy);
+						};
+						var strongMatches = _.filter(matches, function(match){
+							var CONF = 0.85;
+							var DIST = 30;
+							return (match.confidence > 0.8 && _distSqr(match) < DIST*DIST);
+						});
+						
+						
+					  var percent = Math.round(strongMatches.length*100/NUM);
+					  resolve({"matches":matches, "percent":percent});
+				});
 			};
 			
 			var check = function(){
 			var _this = this;
 				var p = [
-					_getShapeContext(canvas0, canvas1),
+					_getTrack(canvas0, canvas1),
 					_getPHash(canvas0, canvas1),
 					_getPercent(canvas0, canvas1),
 				];
 				Promise.all(p).then(function(out){
 					var s = "";
 					s += "\n<br/><br/>";
-					s += "contextMatch:\t\t" + out[0].context;
+					s += "contextMatch:\t\t" + out[0].percent;
 					s += "\n<br/><br/>";
 					s += "hashDistance:\t\t" + out[1].hashDistance;
 					s += "\n<br/><br/>";
 					s += "percent:\t\t" + out[2].percent;
 					var clrs = ["blue", "black", "gray", "green", "purple", "brown", "red"];
 					_this.point = {
-						x:parseFloat(out[0].context),
+						x:parseFloat(out[0].percent),
 						y:parseFloat(out[1].hashDistance),
 						z:parseFloat(out[2].percent)
 					};
@@ -376,21 +420,25 @@
 			};
 			
 			var _addToTable = function(p, val){
-				$("#data").append("<tr><td>" + JSON.stringify(this.point) + "</td><td>" + val + "</td></tr>");
+				var row = $("<tr><td>" + this.point.x + "</td><td>" + this.point.y + "</td><td>" + this.point.z + "</td><td>" + (val ? "true" : "false") + "</td></tr>");
+				if(val){
+					row.addClass("row-ok");
+				}
+				$("#data").append(row);
 			};
 			
 			var isCorrect = function(){
 				points_correct.push(this.point);
 				recalc();
 				$("#correct, #notcorrect").attr("disabled", "disabled");
-				_addToTable(this.point, "true");
+				_addToTable(this.point, true);
 			};
 			
 			var isNotCorrect = function(){
 				points_incorrect.push(this.point);
 				recalc();
 				$("#correct, #notcorrect").attr("disabled", "disabled");
-				_addToTable(this.point, "false");
+				_addToTable(this.point, false);
 			};
 			
 			document.getElementById("draw").addEventListener("click", _.bind(draw, this));

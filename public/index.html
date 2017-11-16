@@ -1,0 +1,209 @@
+<html>
+	<head>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.11.5/paper-full.min.js"></script>
+		<script src="logo.js"></script>
+		<script src="sketchy.js"></script>
+		<script src="imagetracer.js"></script>
+		<script src="pathdata.js"></script>
+		<style>
+			canvas{
+				border:1px dashed blue;
+			}
+			textarea{
+				resize:none;
+			}
+			*{
+				padding:4px;
+				font-size:large;
+			}
+		</style>
+	</head>
+	<body>
+		<button id="draw">Draw</button>
+		<button id="check">Check</button>
+		<br/>
+		<br/>
+		<table>
+			<tr>
+				<td><canvas id="canvas0" width='600' height='600'></canvas></td>
+				<td><canvas id="canvas1" width='600' height='600'></canvas></td>
+			</tr>
+			<tr>
+				<td><textarea rows="6" cols="48" id="text0">rpt 10[fd 200 rt 150]</textarea></td>
+				<td><textarea rows="6" cols="48" id="text1">fd 50 setpc red setps 6 rpt 10[fd 200 rt 150]</textarea></td>
+			</tr>
+		</table>
+		
+		<script>
+		
+			var LOGO_OPTIONS = {
+                read: function(s) {
+                    console.log("read", s);
+                },
+                write: function() {
+                    console.log("write", arguments);
+                },
+                clear: function() {
+                    console.log("clr");
+                }
+            };
+			
+			var OPTIONS =  {
+				"ltres":0.1,   // tweak?
+				"qtres":-1,    // negative to never match curves
+				"scale":1      // why?
+			};
+			
+			var Turtle = function(id){
+				this.canvas = document.getElementById(id);
+				this.ctx = this.canvas.getContext("2d");
+				this.reset();
+			};
+			
+			Turtle.prototype.reset = function(){
+				this.ctx.clearRect(0, 0, 600, 600);
+				this.heading = -90;
+				this.pos = {
+					x:300,
+					y:300
+				};
+				this.ctx.moveTo(this.pos.x, this.pos.y);
+				this.color = "green";
+				this.width = 3;
+				this.ctx.lineWidth = this.width;
+				this.ctx.strokeStyle = this.color;
+				this.penDown = true;
+			};
+			
+			Turtle.prototype.move = function(a){
+				var newPos = {
+					x:this.pos.x + a*Math.cos(this.heading*Math.PI/180),
+					y:this.pos.y + a*Math.sin(this.heading*Math.PI/180)
+				};
+				if(this.penDown){
+					this.ctx.beginPath();
+					this.ctx.moveTo(this.pos.x, this.pos.y);
+					this.ctx.lineTo(newPos.x, newPos.y);
+					this.ctx.stroke();
+				}
+				else{
+					this.ctx.moveTo(newPos.x, newPos.y);
+				}
+				this.pos.x = newPos.x;
+				this.pos.y = newPos.y;
+			};
+			
+			Turtle.prototype.turn = function(a){
+				this.heading += a;
+			};
+			
+			Turtle.prototype.initPenDown = function(){
+				this.penDown = true;
+			};
+			
+			Turtle.prototype.initPenUp = function(a){
+				this.penDown = false;
+			};
+			
+			Turtle.prototype.initPenWidth = function(w){
+				this.width = w;
+				this.ctx.lineWidth = this.width;
+			};
+			
+			Turtle.prototype.initPenColor = function(c){
+				this.color = c;
+				this.ctx.strokeStyle = this.color;
+			};
+			
+			var turtles = [
+				new Turtle("canvas0"),
+				new Turtle("canvas1")
+			];
+			var interpreters = [
+				new LogoInterpreter(turtles[0], LOGO_OPTIONS),
+				new LogoInterpreter(turtles[1], LOGO_OPTIONS)
+			];
+			
+			var drawIndex = function(index, text){
+				return new Promise(function(resolve, reject){
+					interpreters[index]
+					.run(text)
+					.catch(function(e) {
+						alert("error " + e.message);
+						resolve();
+					})
+					.then(function() {
+						resolve();
+					});
+				});
+			};
+			
+			var reset = function(i){
+				turtles[0].reset();
+				turtles[1].reset();
+			};
+			
+			var _cleanLogo = function(s){
+				var COLORS = ["red", "green", "blue"];
+				var REGS = _.map(COLORS, function(c){
+					return new RegExp(c);
+				});
+				_.each(REGS, function(re, i){
+					s = s.replace(re, "\"" + COLORS[i]);
+				});
+				return s;
+			};
+			
+			var draw = function(){
+				reset();
+				var t0 = _cleanLogo($("#text0").val());
+				var t1 = _cleanLogo($("#text1").val());
+				var p = [
+					drawIndex(0, t0),
+					drawIndex(1, t1)
+				];
+				Promise.all(p).then(function(){
+					// done
+					setTimeout(function(){
+						check();
+					}, 500);
+				});
+			};
+			
+			var _format = function(svgstr){
+				var output = [], $el = $(svgstr);
+				$.each($el.find("path"), function(){
+					var pathString = "";
+					_.each(this.getPathData(), function(obj){
+						pathString += obj.type + (obj.type === "Z" ? "" : obj.values.join(","));
+					});
+					output.push({
+						"fill":"none",
+						"stroke":this.getAttribute("stroke"),
+						"path":pathString,
+						"stroke-opacity":1,
+						"stroke-width":this.getAttribute("stroke-width"),
+						"stroke-linecap":"round",
+						"stroke-linejoin":"round",
+						"transform":[],
+						"type":"path"
+					});
+				});
+				return output;
+			};
+			
+			var check = function(){
+				var svgstr0 = ImageTracer.imagedataToSVG(ImageTracer.getImgdata(canvas0), OPTIONS);
+				var svgstr1 = ImageTracer.imagedataToSVG(ImageTracer.getImgdata(canvas1), OPTIONS);
+				alert(Sketchy.shapeContextMatch(JSON.stringify(_format(svgstr0)), JSON.stringify(_format(svgstr1))));
+			};
+			
+			document.getElementById("draw").addEventListener("click", draw);
+			document.getElementById("check").addEventListener("click", check);
+
+		</script>
+	</body>
+</html>
+

@@ -5,6 +5,8 @@
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.11.5/paper-full.min.js"></script>
 		<script src="logo.js"></script>
 		<script src="sketchy.js"></script>
+		<script src="phash.js"></script>
+		<script src="rembrandt.js"></script>
 		<script src="imagetracer.js"></script>
 		<script src="pathdata.js"></script>
 		<style>
@@ -15,8 +17,9 @@
 				resize:none;
 			}
 			*{
-				padding:4px;
+				padding:3px;
 				font-size:large;
+				margin:6px;
 			}
 		</style>
 	</head>
@@ -29,15 +32,31 @@
 			<tr>
 				<td><canvas id="canvas0" width='600' height='600'></canvas></td>
 				<td><canvas id="canvas1" width='600' height='600'></canvas></td>
+				<td id="output">Output</td>
 			</tr>
 			<tr>
 				<td><textarea rows="6" cols="48" id="text0">rpt 10[fd 200 rt 150]</textarea></td>
 				<td><textarea rows="6" cols="48" id="text1">fd 50 setpc red setps 6 rpt 10[fd 200 rt 150]</textarea></td>
+				<td>
+					<button disabled id="correct">Should be marked correct</button>
+					<button disabled id="notcorrect">Not correct</button>
+				</td>
 			</tr>
+		</table>
+		
+		<table id="data">
 		</table>
 		
 		<script>
 		
+			var points_correct = [];
+			var points_incorrect = [];
+			var plane_data = {
+				pt:{x:0, y:0, z:0},
+				normal:{x:0, y:0, z:0}
+			};
+			
+			
 			var LOGO_OPTIONS = {
                 read: function(s) {
                     console.log("read", s);
@@ -170,7 +189,7 @@
 					setTimeout(function(){
 						check();
 						$("button#check").removeAttr("disabled");
-					}, 500);
+					}, 50);
 				});
 			};
 			
@@ -196,14 +215,188 @@
 				return output;
 			};
 			
-			var check = function(){
-				var svgstr0 = ImageTracer.imagedataToSVG(ImageTracer.getImgdata(canvas0), OPTIONS);
-				var svgstr1 = ImageTracer.imagedataToSVG(ImageTracer.getImgdata(canvas1), OPTIONS);
-				alert(Sketchy.shapeContextMatch(JSON.stringify(_format(svgstr0)), JSON.stringify(_format(svgstr1))));
+			var _getPercent = function(canvas0, canvas1){
+				var url0 = canvas0.toDataURL();
+				var url1 = canvas1.toDataURL();
+				return new Promise(function(resolve, reject){
+					new window.Rembrandt({
+						imageA: url0,
+						imageB: url1,
+						maxDelta: 10,    // Maximum color delta (0...255):
+						maxOffset: 3,	 // Maximum surrounding pixel offset
+						renderComposition: false
+					})
+					.compare()
+					.then(function(result){
+						resolve({
+							"percent":(result.percentageDifference*100).toFixed(1) + "%"
+						});
+					});
+				});
 			};
 			
-			document.getElementById("draw").addEventListener("click", draw);
-			document.getElementById("check").addEventListener("click", check);
+			var _getShapeContext = function(canvas0, canvas1){
+				return new Promise(function(resolve, reject){
+					var svgstr0 = ImageTracer.imagedataToSVG(ImageTracer.getImgdata(canvas0), OPTIONS);
+					var svgstr1 = ImageTracer.imagedataToSVG(ImageTracer.getImgdata(canvas1), OPTIONS);
+					var c = Sketchy.shapeContextMatch(JSON.stringify(_format(svgstr0)), JSON.stringify(_format(svgstr1)));
+					c = Math.round(c*100) + "%";
+					resolve({
+						"context":c
+					});
+				});
+			};
+			
+			var _getPHash = function(canvas0, canvas1){
+				var url0 = canvas0.toDataURL();
+				var url1 = canvas1.toDataURL();
+				return new Promise(function(resolve, reject){
+					var img0 = new Image(), img1 = new Image();
+					img0.onload = function(){
+						img1.onload = function(){
+							resolve({
+								"hashDistance":distance(pHash(img0), pHash(img1))
+							});
+						};
+						img1.src = url1;
+					};
+					img0.src = url0;
+				});
+			};
+			
+			var _predict = function(p){
+				return (_dot(_aMinusB(p, plane_data.pt), plane_data.normal) < 0);
+			};
+			
+			var check = function(){
+			var _this = this;
+				var p = [
+					_getShapeContext(canvas0, canvas1),
+					_getPHash(canvas0, canvas1),
+					_getPercent(canvas0, canvas1),
+				];
+				Promise.all(p).then(function(out){
+					var s = "";
+					s += "\n<br/><br/>";
+					s += "contextMatch:\t\t" + out[0].context;
+					s += "\n<br/><br/>";
+					s += "hashDistance:\t\t" + out[1].hashDistance;
+					s += "\n<br/><br/>";
+					s += "percent:\t\t" + out[2].percent;
+					var clrs = ["blue", "black", "gray", "green", "purple", "brown", "red"];
+					_this.point = {
+						x:parseFloat(out[0].context),
+						y:parseFloat(out[1].hashDistance),
+						z:parseFloat(out[2].percent)
+					};
+					var isCorrect = _predict(_this.point);
+					s += "\n<br/><br/>";
+					s += "predict:\t\t" + isCorrect;
+					$("#output").html(s).css("color", clrs[Math.floor(Math.random()*clrs.length)]);
+					$("#correct, #notcorrect").removeAttr("disabled");
+				});
+			};
+			
+			var _getMP = function(p, q){
+				return {
+					x:(p.x + q.x)/2,
+					y:(p.y + q.y)/2,
+					z:(p.z + q.z)/2
+				};
+			};
+			
+			var _aPlusB = function(a, b){
+				return {
+					x:(b.x + a.x),
+					y:(b.y + a.y),
+					z:(b.z + a.z)
+				};
+			};
+			
+			var _aMinusB = function(a, b){
+				return {
+					x:(-b.x + a.x),
+					y:(-b.y + a.y),
+					z:(-b.z + a.z)
+				};
+			};
+			
+			var _from = function(p, q){
+				return _aMinusB(q, p);
+			};
+			
+			var _normalise = function(p){
+				var len = Math.sqrt(p.x*p.x + p.y*p.y + p.z*p.z);
+				return {
+					x:p.x/len,
+					y:p.y/len,
+					z:p.z/len
+				};
+			};
+			
+			var _dot = function(p, q){
+				return p.x*q.x + p.y*q.y + p.z*q.z;
+			};
+			
+			var recalc = function(){
+				var pt, normal;
+				pt = {
+					x:0,
+					y:0,
+					z:0
+				};
+				normal = {
+					x:0,
+					y:0,
+					z:0
+				};
+				var _num = 0;
+				if(points_correct.length >= 1 && points_incorrect.length >= 1){
+					_.each(points_correct, function(p0){
+						_.each(points_incorrect, function(p1){
+							var myMP = _getMP(p0, p1);
+							var myNormal = _normalise(_from(p0, p1));
+							if(_num === 0){
+								pt = myMP;
+								normal = myNormal;
+							}
+							else{
+								pt = _getMP(pt, myMP);
+								normal = _getMP(normal, myNormal);
+							}
+							console.log(p0, p1, myMP, myNormal, "->", pt, normal);
+							_num++;
+						});
+					});
+				}
+				plane_data.pt = pt;
+				plane_data.normal = normal;
+				console.log(pt, normal);
+				// i think the plane is (x - pt).normal < 0
+			};
+			
+			var _addToTable = function(p, val){
+				$("#data").append("<tr><td>" + JSON.stringify(this.point) + "</td><td>" + val + "</td></tr>");
+			};
+			
+			var isCorrect = function(){
+				points_correct.push(this.point);
+				recalc();
+				$("#correct, #notcorrect").attr("disabled", "disabled");
+				_addToTable(this.point, "true");
+			};
+			
+			var isNotCorrect = function(){
+				points_incorrect.push(this.point);
+				recalc();
+				$("#correct, #notcorrect").attr("disabled", "disabled");
+				_addToTable(this.point, "false");
+			};
+			
+			document.getElementById("draw").addEventListener("click", _.bind(draw, this));
+			document.getElementById("correct").addEventListener("click", _.bind(isCorrect, this));
+			document.getElementById("notcorrect").addEventListener("click", _.bind(isNotCorrect, this));
+			document.getElementById("check").addEventListener("click", _.bind(check, this));
 
 		</script>
 	</body>

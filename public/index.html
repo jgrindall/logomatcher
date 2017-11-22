@@ -193,18 +193,6 @@
 				return s;
 			};
 			
-			var _fixLines = function(c){
-				StackBlur.canvasRGBA(c, 0, 0, 600, 600, 20);
-				/*
-				var data0 = c.getContext("2d").getImageData(0,0,600,600);
-				var len0 = data0.data.length;
-				for(var i = 0; i < len0; i+=4){
-					data0.data[i + 3] *= 100;
-				}
-				c.getContext("2d").putImageData(data0, 0, 0);
-				*/
-			};
-			
 			var draw = function(){
 				reset();
 				$("button#check").attr("disabled", "disabled");
@@ -219,9 +207,6 @@
 				
 					var c0 = $("#canvas0").get(0);
 					var c1 = $("#canvas1").get(0);
-					//_fixLines(c0);
-					//_fixLines(c1);
-					
 					
 					setTimeout(function(){
 						check();
@@ -280,14 +265,12 @@
 					data1 = window.ImageTracer.getImgdata(canvas1);
 					svgstr0 = window.ImageTracer.imagedataToSVG(data0, OPTIONS);
 					svgstr1 = window.ImageTracer.imagedataToSVG(data1, OPTIONS);
-					//$("body").append(svgstr0).append(svgstr1);
 					c0 = Sketchy.shapeContextMatch(JSON.stringify(_format(svgstr0)), JSON.stringify(_format(svgstr1)));
 					
 					data0 = window.ImageTracer112.getImgdata(canvas0);
 					data1 = window.ImageTracer112.getImgdata(canvas1);
 					svgstr0 = window.ImageTracer112.imagedataToSVG(data0, OPTIONS);
 					svgstr1 = window.ImageTracer112.imagedataToSVG(data1, OPTIONS);
-					//$("body").append(svgstr0).append(svgstr1);
 					c1 = Sketchy.shapeContextMatch(JSON.stringify(_format(svgstr0)), JSON.stringify(_format(svgstr1)));
 					
 					resolve({
@@ -295,88 +278,6 @@
 						"context1":Math.round(c1*100) + "%"
 					});
 				});
-			};
-			
-			var _getPHash = function(canvas0, canvas1){
-				var url0 = canvas0.toDataURL();
-				var url1 = canvas1.toDataURL();
-				return new Promise(function(resolve, reject){
-					var img0 = new Image(), img1 = new Image();
-					img0.onload = function(){
-						img1.onload = function(){
-							resolve({
-								"hashDistance":distance(pHash(img0), pHash(img1))
-							});
-						};
-						img1.src = url1;
-					};
-					img0.src = url0;
-				});
-			};
-			
-			var _getTrack = function(canvas0, canvas1){
-				return new Promise(function(resolve, reject){
-					var imageData1 = canvas0.getContext("2d").getImageData(0, 0, 600, 600);
-					  var imageData2 = canvas1.getContext("2d").getImageData(0, 0, 600, 600);
-				  
-					  var gray1 = tracking.Image.grayscale(tracking.Image.blur(imageData1.data, 600, 600, 2), 600, 600);
-					  var gray2 = tracking.Image.grayscale(tracking.Image.blur(imageData2.data, 600, 600, 2), 600, 600);
-				  
-					  var corners1 = tracking.Fast.findCorners(gray1, 600, 600);
-					  var corners2 = tracking.Fast.findCorners(gray2, 600, 600);
-				  
-					  var descriptors1 = tracking.Brief.getDescriptors(gray1, 600, corners1);
-					  var descriptors2 = tracking.Brief.getDescriptors(gray2, 600, corners2);
-
-					  var matches = tracking.Brief.reciprocalMatch(corners1, descriptors1, corners2, descriptors2);
-					   matches.sort(function(a, b) {
-							return b.confidence - a.confidence;
-						});
-						
-						var NUM = matches.length;
-						
-						var _distSqr = function(match){
-							var p0 = match.keypoint1;
-							var p1 = match.keypoint2;
-							var dx = p0[0] - p1[0];
-							var dy = p0[1] - p1[1];
-							return (dx*dx + dy*dy);
-						};
-						
-						var strongMatches = _.filter(matches, function(match){
-							var CONF = 0.85;
-							var DIST = 20;
-							return (match.confidence > CONF && _distSqr(match) < DIST*DIST);
-						});
-						
-						
-						var percent = 0;
-						
-						if(NUM >= 1){
-							percent = Math.round(strongMatches.length*100/NUM);
-						}
-						
-						resolve({"matches":matches, "percent":percent});
-				});
-			};
-			
-			var _getHough = function(canvas0, canvas1){
-				var data0 = hougher(canvas0);
-				var data1 = hougher(canvas1);
-				drawHough(data0);
-				drawHough(data1);
-				return Promise.resolve();
-			};
-			
-			var _getMatcher = function(canvas0, canvas1){
-				var matchData = Matcher(canvas0, canvas1);
-				matchData = {
-					"percentageMatch":matchData.percentageMatch,
-					"percentageMismatch":matchData.percentageMismatch,
-					"percentageMissing":matchData.percentageMissing,
-					"percentageExtra":matchData.percentageExtra,
-				};
-				return Promise.resolve({"matcher":matchData});
 			};
 			
 			var _getPixelMatch = function(canvas0, canvas1){
@@ -403,6 +304,7 @@
 			};
 			
 			var _mark = function(p){
+				// needs testing
 				return (p.w > 25 && p.z < 1.5 && p.b < 5 && p.c < 0.2 && p.d.outside < 25 && p.d.missing < 25);
 			};
 			

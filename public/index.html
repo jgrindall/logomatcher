@@ -321,7 +321,7 @@
 				];
 				Promise.all(p).then(function(out){
 					_this.point = {
-						w:Math.min(parseFloat(out[0].context0), parseFloat(out[0].context1)),
+						w:(parseFloat(out[0].context0) + parseFloat(out[0].context1))/2,
 						z:parseFloat(out[1].percent),
 						b:parseFloat(out[2].pm).toFixed(2),
 						c:parseFloat(out[3].hausdorff).toFixed(2),

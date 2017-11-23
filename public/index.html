@@ -299,15 +299,18 @@
 			var _getIsInside = function(canvas0, canvas1){
 				// canvas 1 is the target canvas.
 				// thicken canvas1 and see what % canvas0's solid pixels are outside the target.
+				var outside = window.getPercentagePixelsOutside(canvas0, canvas1);
+				var missing = window.getPercentagePixelsOutside(canvas1, canvas0);
+				$("body").append(outside.illustration).append(missing.illustration);
 				return Promise.resolve({
-					"outside":window.getPercentagePixelsOutside(canvas0, canvas1).percentOutside,
-					"missing":window.getPercentagePixelsOutside(canvas1, canvas0).percentOutside
+					"outside":outside.percentOutside,
+					"missing":missing.percentOutside
 				});
 			};
 			
 			var _mark = function(p){
 				// needs testing
-				return (p.w > 20 && p.z < 1.5 && p.b < 5 && p.c < 0.2 && p.d.outside < 30 && p.d.missing < 30);
+				return (p.w > 20 && p.z < 1.5 && p.b < 5 && p.c < 0.25 && p.d.outside < 30 && p.d.missing < 30);
 			};
 			
 			var check = function(){

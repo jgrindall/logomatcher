@@ -33,10 +33,14 @@
 	};
 	
 	var DEFAULTS = {
-		"thickness":7,
-		"alphaTolerance":30,
+		"thickness":8,
+		"alphaTolerance":40,
 		"distance":4
 	};
+	
+	var GREY_MASK = {r:210, b:210, g:210, a:255};
+	var EMPTY = {r:0, b:0, g:0, a:0};
+	var RED = {r:255, b:0, g:0, a:255};
 	
 	var _thicken = function(canvas, thickness, alphaTolerance){
 		var c = document.createElement("canvas");
@@ -51,10 +55,10 @@
 			for(var j = 0; j < canvas.height; j++){
 				var p = _getPixelAt(i, j, imgData);
 				if(p.a > alphaTolerance){
-					_setPixelAt(i, j, imgData, {r:0, b:0, g:0, a:255});  //black
+					_setPixelAt(i, j, imgData, GREY_MASK);  //black
 				}
 				else{
-					_setPixelAt(i, j, imgData, {r:0, b:0, g:0, a:0});    // empty
+					_setPixelAt(i, j, imgData, EMPTY);    // empty
 				}
 			}
 		}
@@ -107,13 +111,37 @@
 				"numPixels":numPixels,
 				"numOutside":numOutside,
 				"percentOutside":parseFloat((100*numOutside/numPixels).toFixed(2)),
-				"offset":offset
+				"offset":offset,
+				"offsetIndex":offsetIndex
 			};
 		});
 		_output = _.sortBy(_output, function(obj){
 			return obj.percentOutside;
 		});
-		return _output[0];
+		var bestData = _output[0];
+		var bestOffset = offsets[_output[0].offsetIndex];
+		var illus = document.createElement("canvas");
+		illus.width = canvas.width;
+		illus.height = canvas.height;
+		illus.getContext("2d").drawImage(thickendCanvas, 0, 0);
+		var illusImgData = illus.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
+		for(var i = 0; i < canvas.width; i++){
+			for(var j = 0; j < canvas.height; j++){
+				var p = _getPixelAt(i + bestOffset.dx, j + bestOffset.dy, data);
+				var q = _getPixelAt(i, j, targetData);
+				if(p.a > options.alphaTolerance){
+					// solid in yours
+					if(q.a < options.alphaTolerance){
+						// it shouldn't be there
+						_setPixelAt(i, j, illusImgData, RED);
+					}
+				}
+			}
+		}
+		
+		illus.getContext("2d").putImageData(illusImgData, 0, 0);
+		bestData.illustration = illus;
+		return bestData;
 	};
 	
 	window.getPercentagePixelsOutside = _isInside;

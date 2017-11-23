@@ -35,7 +35,7 @@
 	var DEFAULTS = {
 		"thickness":8,
 		"alphaTolerance":40,
-		"distance":3,
+		"distance":5,
 		"currentMaximum":undefined
 	};
 	
@@ -131,7 +131,9 @@
 		thickendTargetCanvas = _thicken(targetCanvas, options.thickness, options.alphaTolerance);
 		_outside = _.map(offsets, function(offset){
 			var outside = _getOutsideForOffset(yourCanvas, thickendTargetCanvas, offset, options);
-			options.currentMaximum = outside;
+			if(outside < Infinity){
+				options.currentMaximum = outside;
+			}
 			return outside;
 		});
 		minOutside = _.min(_outside);

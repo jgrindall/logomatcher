@@ -8,7 +8,7 @@
 		<script src="phash.js"></script>
 		<script src="rembrandt.js"></script>
 		<script src="pixelmatch.js"></script>
-		<script src="isInside.js"></script>
+		<script src="isInside2.js"></script>
 		<script src="hausdorff.js"></script>
 		<script src="blur.js"></script>
 		<script src="imagetracer_old.js"></script>
@@ -243,6 +243,7 @@
 				var url0 = canvas0.toDataURL();
 				var url1 = canvas1.toDataURL();
 				return new Promise(function(resolve, reject){
+					var t = Date.now();
 					new window.Rembrandt({
 						imageA: url0,
 						imageB: url1,
@@ -253,7 +254,8 @@
 					.compare()
 					.then(function(result){
 						resolve({
-							"percent":(result.percentageDifference*100).toFixed(1) + "%"
+							"percent":(result.percentageDifference*100).toFixed(1) + "%",
+							"time":Date.now() - t
 						});
 					});
 				});
@@ -261,6 +263,7 @@
 			
 			var _getShapeContext = function(canvas0, canvas1){
 				return new Promise(function(resolve, reject){
+					var t = Date.now();
 					var data0, data1, svgstr0, svgstr1, c0, c1;
 					
 					data0 = window.ImageTracer.getImgdata(canvas0);
@@ -277,34 +280,39 @@
 					
 					resolve({
 						"context0":Math.round(c0*100) + "%",
-						"context1":Math.round(c1*100) + "%"
+						"context1":Math.round(c1*100) + "%",
+						"time":Date.now() - t
 					});
 				});
 			};
 			
 			var _getPixelMatch = function(canvas0, canvas1){
+				var t = Date.now();
 				var data0 = canvas0.getContext("2d").getImageData(0,0,600,600);
 				var data1 = canvas1.getContext("2d").getImageData(0,0,600,600);
 				var match = pixelmatch(data0.data, data1.data, null, 600, 600, {"threshold":0.1});
-				return Promise.resolve({"pm":100*match/(600*600)});
+				return Promise.resolve({"pm":100*match/(600*600), "time":Date.now() - t});
 			};
 			
 			var _getHausdorff = function(canvas0, canvas1){
+				var t = Date.now();
 				var data0 = canvas0.getContext("2d").getImageData(0,0,600,600);
 				var data1 = canvas1.getContext("2d").getImageData(0,0,600,600);
 				var h = window.hausdorffDistance(data0, data1);
-				return Promise.resolve({"hausdorff":h});
+				return Promise.resolve({"hausdorff":h, "time":Date.now() - t});
 			};
 			
 			var _getIsInside = function(canvas0, canvas1){
 				// canvas 1 is the target canvas.
 				// thicken canvas1 and see what % canvas0's solid pixels are outside the target.
+				var t = Date.now();
 				var outside = window.getPercentagePixelsOutside(canvas0, canvas1);
 				var missing = window.getPercentagePixelsOutside(canvas1, canvas0);
 				$("body").append(outside.illustration).append(missing.illustration);
 				return Promise.resolve({
 					"outside":outside.percentOutside,
-					"missing":missing.percentOutside
+					"missing":missing.percentOutside,
+					"time":Date.now() - t
 				});
 			};
 			
@@ -323,6 +331,7 @@
 					_getIsInside(canvas0, canvas1)
 				];
 				Promise.all(p).then(function(out){
+					console.log(_.pluck(out, "time"));
 					_this.point = {
 						w:(parseFloat(out[0].context0) + parseFloat(out[0].context1))/2,
 						z:parseFloat(out[1].percent),

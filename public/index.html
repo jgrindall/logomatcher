@@ -65,7 +65,6 @@
 		
 		<table id="data">
 			<thead>
-				<td>Context match %</td>
 				<td>rembrandt</td>
 				<td>pixelmatch</td>
 				<td>Hausdorff distance</td>
@@ -217,28 +216,6 @@
 				});
 			};
 			
-			var _format = function(svgstr){
-				var output = [], $el = $(svgstr);
-				$.each($el.find("path"), function(){
-					var pathString = "";
-					_.each(this.getPathData(), function(obj){
-						pathString += obj.type + (obj.type === "Z" ? "" : obj.values.join(","));
-					});
-					output.push({
-						"fill":"none",
-						"stroke":this.getAttribute("stroke"),
-						"path":pathString,
-						"stroke-opacity":1,
-						"stroke-width":this.getAttribute("stroke-width"),
-						"stroke-linecap":"round",
-						"stroke-linejoin":"round",
-						"transform":[],
-						"type":"path"
-					});
-				});
-				return output;
-			};
-			
 			var _getRembrandt = function(canvas0, canvas1){
 				var url0 = canvas0.toDataURL();
 				var url1 = canvas1.toDataURL();
@@ -257,31 +234,6 @@
 							"percent":(result.percentageDifference*100).toFixed(1) + "%",
 							"time":Date.now() - t
 						});
-					});
-				});
-			};
-			
-			var _getShapeContext = function(canvas0, canvas1){
-				return new Promise(function(resolve, reject){
-					var t = Date.now();
-					var data0, data1, svgstr0, svgstr1, c0, c1;
-					
-					data0 = window.ImageTracer.getImgdata(canvas0);
-					data1 = window.ImageTracer.getImgdata(canvas1);
-					svgstr0 = window.ImageTracer.imagedataToSVG(data0, OPTIONS);
-					svgstr1 = window.ImageTracer.imagedataToSVG(data1, OPTIONS);
-					c0 = Sketchy.shapeContextMatch(JSON.stringify(_format(svgstr0)), JSON.stringify(_format(svgstr1)));
-					
-					data0 = window.ImageTracer112.getImgdata(canvas0);
-					data1 = window.ImageTracer112.getImgdata(canvas1);
-					svgstr0 = window.ImageTracer112.imagedataToSVG(data0, OPTIONS);
-					svgstr1 = window.ImageTracer112.imagedataToSVG(data1, OPTIONS);
-					c1 = Sketchy.shapeContextMatch(JSON.stringify(_format(svgstr0)), JSON.stringify(_format(svgstr1)));
-					
-					resolve({
-						"context0":Math.round(c0*100) + "%",
-						"context1":Math.round(c1*100) + "%",
-						"time":Date.now() - t
 					});
 				});
 			};
@@ -305,14 +257,12 @@
 			var _getIsInside = function(canvas0, canvas1){
 				// canvas 1 is the target canvas.
 				// thicken canvas1 and see what % canvas0's solid pixels are outside the target.
-				var t = Date.now();
-				var outside = window.getPercentagePixelsOutside(canvas0, canvas1);
-				var missing = window.getPercentagePixelsOutside(canvas1, canvas0);
-				$("body").append(outside.illustration).append(missing.illustration);
+				var data = window.imageCompare(canvas0, canvas1);
+				console.log(data);
+				$("body").append(data.outsideIllustration).append(data.missingIllustration);
 				return Promise.resolve({
-					"outside":outside.percentOutside,
-					"missing":missing.percentOutside,
-					"time":Date.now() - t
+					"outside":data.outside,
+					"missing":data.missing
 				});
 			};
 			
@@ -324,20 +274,17 @@
 			var check = function(){
 				var _this = this;
 				var p = [
-					_getShapeContext(canvas0, canvas1),
 					_getRembrandt(canvas0, canvas1),
 					_getPixelMatch(canvas0, canvas1),
 					_getHausdorff(canvas0, canvas1),
 					_getIsInside(canvas0, canvas1)
 				];
 				Promise.all(p).then(function(out){
-					console.log(_.pluck(out, "time"));
 					_this.point = {
-						w:(parseFloat(out[0].context0) + parseFloat(out[0].context1))/2,
-						z:parseFloat(out[1].percent),
-						b:parseFloat(out[2].pm).toFixed(2),
-						c:parseFloat(out[3].hausdorff).toFixed(2),
-						d:out[4]
+						z:parseFloat(out[0].percent),
+						b:parseFloat(out[1].pm).toFixed(2),
+						c:parseFloat(out[2].hausdorff).toFixed(2),
+						d:out[3]
 					};
 					if(_mark(_this.point)){
 						$(".think").text("I think this is correct");
@@ -350,7 +297,7 @@
 			};
 			
 			var _addToTable = function(p, val){
-				var row = $("<tr><td>" + this.point.w + "</td><td>" + this.point.z + "</td><td>" + this.point.b + "</td><td>" + this.point.c + "</td><td>" + JSON.stringify(this.point.d) + "</td></tr>");
+				var row = $("<tr><td>" + this.point.z + "</td><td>" + this.point.b + "</td><td>" + this.point.c + "</td><td>" + JSON.stringify(this.point.d) + "</td></tr>");
 				if(val){
 					row.addClass("row-ok");
 				}

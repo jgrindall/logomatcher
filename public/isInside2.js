@@ -123,9 +123,36 @@
 		return _countFull(translatedCanvas, options);
 	};
 	
-	var _isInside = function(yourCanvas, targetCanvas, options){
-		var numYourFullPixels, thickendTargetCanvas, offsets, _outside, minOutside, minIndex, minOffset, illus, stickingOut, translated;
-		options = _.defaults(options || {}, DEFAULTS);
+	var _reverse = function(offset){
+		return {
+			dx:offset.dx * -1,
+			dy:offset.dy * -1
+		};
+	};
+	
+	var _colorify = function(canvas, color, options){
+		var imgData, len, i, coloredCanvas;
+		coloredCanvas = document.createElement("canvas");
+		coloredCanvas.width = canvas.width;
+		coloredCanvas.height = canvas.height;
+		imgData = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
+		len = imgData.data.length - 3;
+		count = 0;
+		for(i = 0; i < len; i += 4){
+			if(imgData.data[i + 3] > options.alphaTolerance){
+				imgData.data[i + 0] = color.r;
+				imgData.data[i + 1] = color.g;
+				imgData.data[i + 2] = color.b;
+				imgData.data[i + 3] = 255;
+			}
+		}
+		coloredCanvas.getContext("2d").putImageData(imgData, 0, 0);
+		return coloredCanvas;
+	};
+	
+	var _getOutside = function(yourCanvas, targetCanvas, options){
+		var numYourFullPixels, thickendTargetCanvas, offsets, _outside, minOutside, minIndex, minOffset, translated;
+		options.currentMaximum = undefined;
 		numYourFullPixels = _countFull(yourCanvas, options);
 		offsets = _getOffsets(options.distance);
 		thickendTargetCanvas = _thicken(targetCanvas, options.thickness, options.alphaTolerance);
@@ -139,19 +166,34 @@
 		minOutside = _.min(_outside);
 		minIndex = _outside.indexOf(minOutside);
 		minOffset = offsets[minIndex];
-		illus = document.createElement("canvas");
-		illus.width = yourCanvas.width;
-		illus.height = yourCanvas.height;
-		illus.getContext("2d").drawImage(thickendTargetCanvas, 0, 0);  // draw the grey one
-		//draw bits of yours that stick out
 		translated = _getTranslated(yourCanvas, minOffset);
 		_removeUsingMask(translated, thickendTargetCanvas);
-		illus.getContext("2d").drawImage(translated, 0, 0);
+		translated = _getTranslated(translated, _reverse(minOffset));
 		return {
-			"illustration":illus,
+			"illustration":translated,
 			"percentOutside":(100*minOutside/numYourFullPixels).toFixed(2)
 		};
 	};
 	
-	window.getPercentagePixelsOutside = _isInside;
+	window.imageCompare = function(yourCanvas, targetCanvas, options){
+		var outside, missing, illustration;
+		options = _.defaults(options || {}, DEFAULTS);
+		outside = _getOutside(canvas0, canvas1, options);
+		missing = _getOutside(canvas1, canvas0, options);
+		outside.illustration = _colorify(outside.illustration, {r:200, g:0, b:0, a:255}, options);
+		missing.illustration = _colorify(missing.illustration, {r:200, g:0, b:0, a:255}, options);
+		illustration = document.createElement("canvas");
+		illustration.width = yourCanvas.width;
+		illustration.height = yourCanvas.height;
+		illustration.getContext("2d").drawImage(outside.illustration, 0, 0);
+		illustration.getContext("2d").drawImage(missing.illustration, 0, 0);
+		
+		return {
+			"outside":outside.percentOutside,
+			"missing":missing.percentOutside,
+			"outsideIllustration":outside.illustration,
+			"missingIllustration":missing.illustration
+		};
+	};
+	
 })();

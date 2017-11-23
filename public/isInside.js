@@ -33,9 +33,9 @@
 	};
 	
 	var DEFAULTS = {
-		"thickness":5,
-		"alphaTolerance":20,
-		"distance":3
+		"thickness":7,
+		"alphaTolerance":30,
+		"distance":4
 	};
 	
 	var _thicken = function(canvas, thickness, alphaTolerance){
